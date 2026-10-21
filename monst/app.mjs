@@ -5,28 +5,30 @@ import {pocketProgress,loopProgress,wallName} from './goals.mjs';
 const $=id=>document.getElementById(id),ctx=$('board').getContext('2d'),clone=x=>JSON.parse(JSON.stringify(x));
 const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}},write=(key,v)=>{try{localStorage.setItem(key,JSON.stringify(v));return true;}catch{return false;}};
 let completed=cleanCompleted(read('shotlab-completed',[]),lessons.length),index=0,scene=clone(lessons[0]),mode='learn',angle=-25*Math.PI/180,budget=2200,run=null,previous=null,travel=0,playing=false,lastTime=0,finished=false,drag=null,editDrag=null,tool='shot',attempts=0,pulse=0,angleMode='discrete',collisionMode='stepped',group='all';
+let aimVisible=false;
+const CANCEL_RADIUS=12;
 const predictionCache=new Map();
 function predict(s,a,b){const key=JSON.stringify([s,a,b]);if(!predictionCache.has(key)){if(predictionCache.size>=6)predictionCache.delete(predictionCache.keys().next().value);predictionCache.set(key,simulate(s,a,b));}return predictionCache.get(key);}
 const COLORS={lime:'#c6ee80',orange:'#ffb46d',muted:'#83a272',blue:'#82cbdd'};
-function angleSet(v){const raw=angleMode==='discrete'?snapAngle(v):v;angle=Math.atan2(Math.sin(raw),Math.cos(raw));const deg=angle*180/Math.PI;$('angle').value=deg.toFixed(3);$('angleNumber').value=deg.toFixed(3);$('angleValue').textContent=(deg<0?'−':'')+Math.abs(deg).toFixed(3)+'°';$('angleStepLabel').textContent=angleMode==='discrete'?`1024段階 · ${angleIndex(angle)} / 1023`:'連続角度 · 刻みなし';}
+function angleSet(v){aimVisible=true;const raw=angleMode==='discrete'?snapAngle(v):v;angle=Math.atan2(Math.sin(raw),Math.cos(raw));const deg=angle*180/Math.PI;$('angle').value=deg.toFixed(3);$('angleNumber').value=deg.toFixed(3);$('angleValue').textContent=(deg<0?'−':'')+Math.abs(deg).toFixed(3)+'°';$('angleStepLabel').textContent=angleMode==='discrete'?`1024段階 · ${angleIndex(angle)} / 1023`:'連続角度 · 刻みなし';}
 const groupNames={basic:'基礎の作図',multi:'３〜８反射',loop:'ループ・８の字',gap:'隙間にはまる',collision:'敵・ブロック判定',control:'操作と角度の精度'};
 function lessonList(){
  const shown=lessons.map((l,i)=>({l,i})).filter(({i})=>group==='all'||lessonGroup(i)===group);
  let lastGroup='';
  $('lessonList').innerHTML=shown.map(({l,i})=>{
   const g=lessonGroup(i),heading=group==='all'&&g!==lastGroup?`<div class="lesson-group">${groupNames[g]}</div>`:'';lastGroup=g;
-  return heading+`<button class="lesson-item ${i===index&&mode==='learn'?'active':''}" data-lesson="${i}" aria-pressed="${i===index&&mode==='learn'}"><span class="lesson-num">${String(i+1).padStart(2,'0')}</span><span class="lesson-copy"><strong>${l.title}${i>=18?'<i class="new-dot" aria-label="追加した課題"></i>':''}</strong><small>${l.sub}</small></span><span class="lesson-check">${completed.includes(i)?'✓':''}</span></button>`;
+  return heading+`<button class="lesson-item ${i===index&&mode==='learn'?'active':''}" data-lesson="${i}" aria-pressed="${i===index&&mode==='learn'}"><span class="lesson-num">${String(i+1).padStart(2,'0')}</span><span class="lesson-copy"><strong>${l.title}${i>=18?'<i class="new-dot" aria-label="追加した課題"></i>':''}</strong><small>${l.sub}</small></span><span class="lesson-check">${completed.includes(i)?'✓':'▶'}</span></button>`;
  }).join('');
- document.querySelectorAll('[data-lesson]').forEach(b=>b.onclick=()=>selectLesson(+b.dataset.lesson));
+ document.querySelectorAll('[data-lesson]').forEach(b=>b.onclick=()=>{selectLesson(+b.dataset.lesson);openPlay();});
  $('completedCount').textContent=completed.length+' / '+lessons.length;$('lessonTotal').textContent=lessons.length+' LESSONS';$('progressBar').style.width=completed.length/lessons.length*100+'%';
 }
-function selectLesson(i){if(group!=='all'&&lessonGroup(i)!==group){group=lessonGroup(i);$('lessonCategory').value=group;}mode='learn';index=i;scene=clone(lessons[i]);write('shotlab-last-lesson',i);scene.collisionMode=collisionMode;if(['collision','wallsize','pocket'].includes(scene.type)){collisionMode='stepped';scene.collisionMode=collisionMode;$('collisionMode').value=collisionMode;$('collisions').checked=true;}previous=null;attempts=0;updateMode();budget=scene.budget||2200;$('budget').value=budget;$('budgetValue').textContent=budget.toLocaleString();angleSet(([-25,-50,-47,-68,-53,-55][i]??(idealAngle(scene)*180/Math.PI+2))*Math.PI/180);reset();updateContent();lessonList();}
+function selectLesson(i){cancelGesture();if(group!=='all'&&lessonGroup(i)!==group){group=lessonGroup(i);$('lessonCategory').value=group;}mode='learn';index=i;scene=clone(lessons[i]);write('shotlab-last-lesson',i);scene.collisionMode=collisionMode;if(['collision','wallsize','pocket'].includes(scene.type)){collisionMode='stepped';scene.collisionMode=collisionMode;$('collisionMode').value=collisionMode;$('collisions').checked=true;}previous=null;attempts=0;updateMode();budget=scene.budget||2200;$('budget').value=budget;$('budgetValue').textContent=budget.toLocaleString();angleSet(([-25,-50,-47,-68,-53,-55][i]??(idealAngle(scene)*180/Math.PI+2))*Math.PI/180);reset();updateContent();lessonList();}
 function updateMode(){ $('learnTab').classList.toggle('active',mode==='learn');$('freeTab').classList.toggle('active',mode==='free');$('editor').hidden=mode!=='free';$('lessonList').hidden=mode==='free';document.querySelector('.small-note').hidden=mode==='free';}
-function updateContent(){const l=lessons[index];$('lessonTag').textContent=mode==='free'?'SANDBOX':`LESSON ${String(index+1).padStart(2,'0')}`;$('gameTitle').textContent=mode==='free'?'自由実験室':l.title;$('stageChip').textContent=mode==='free'?'配置も、角度も自由':l.chip;$('ideaIndex').textContent=mode==='free'?'FREE':`${String(index+1).padStart(2,'0')} / ${lessons.length}`;$('ideaTitle').innerHTML=(mode==='free'?'自分だけの、\n実験をしよう。':l.heading).replace('\n','<br>');$('ideaLead').textContent=mode==='free'?'目標・敵・ブロックを置いて、自分でルートを作ってみよう。引っぱって弾く操作と「移動」ツールを使い分けられます。':l.lead;$('formula').innerHTML=(mode==='free'?'予想 → 発射 → 比較\n配置を変えて、新しい道へ':l.formula).replace('\n','<br>');$('steps').innerHTML=(mode==='free'?['「移動」で駒や目標をドラッグして配置。','敵・ブロック・目標を選んで盤面をタップ。','盤面のどこからでも引くか、「弾く」で実験。']:l.steps).map((x,i)=>`<div class="step"><span>${i+1}</span><p>${x}</p></div>`).join('');$('insight').textContent=mode==='free'?'敵は段差モデルと円を比較でき、弱点付き敵は複合判定を持ちます。ブロックは長方形のモデルです。壁だけの理論と、障害物に触れたときの違いを比較できます。':l.insight;$('ideal').disabled=mode==='free';$('missionText').textContent=mode==='free'?'配置を変えて、ルートを自由に実験。':l.goal;$('gestureTip').textContent=mode==='free'?'弾くツールで、どこからでもドラッグ。':'盤面のどこからでも引けます。全画面では余白からも操作できます。';updatePager();updateDiagram();}
+function updateContent(){const l=lessons[index];$('lessonTag').textContent=mode==='free'?'SANDBOX':`LESSON ${String(index+1).padStart(2,'0')}`;$('gameTitle').textContent=mode==='free'?'自由実験室':l.title;$('stageChip').textContent=mode==='free'?'配置も、角度も自由':l.chip;$('ideaIndex').textContent=mode==='free'?'FREE':`${String(index+1).padStart(2,'0')} / ${lessons.length}`;$('ideaTitle').innerHTML=(mode==='free'?'自分だけの、\n実験をしよう。':l.heading).replace('\n','<br>');$('ideaLead').textContent=mode==='free'?'目標・敵・ブロックを置いて、自分でルートを作ってみよう。引っぱって弾く操作と「移動」ツールを使い分けられます。':l.lead;$('formula').innerHTML=(mode==='free'?'予想 → 発射 → 比較\n配置を変えて、新しい道へ':l.formula).replace('\n','<br>');$('steps').innerHTML=(mode==='free'?['「移動」で駒や目標をドラッグして配置。','敵・ブロック・目標を選んで盤面をタップ。','盤面のどこからでも引くか、「弾く」で実験。']:l.steps).map((x,i)=>`<div class="step"><span>${i+1}</span><p>${x}</p></div>`).join('');$('insight').textContent=mode==='free'?'敵は段差モデルと円を比較でき、弱点付き敵は複合判定を持ちます。ブロックは長方形のモデルです。壁だけの理論と、障害物に触れたときの違いを比較できます。':l.insight;$('ideal').disabled=mode==='free';$('missionText').textContent=mode==='free'?'配置を変えて、ルートを自由に実験。':l.goal;$('gestureTip').textContent=mode==='free'?'プレイ画面内で操作を選んで配置・発射。':'「プレイ画面を開く」で練習開始。開始位置に指を戻すとキャンセル。';$('playTitle').textContent=mode==='free'?'自由実験室':l.title;$('playMission').textContent=$('missionText').textContent;$('focusToolLabel').hidden=mode!=='free';$('focusIdeal').hidden=mode==='free';updatePager();updateDiagram();}
 function updateDiagram(){const t=lessons[index].type;const defs='<defs><marker id="a" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#54793b"/></marker></defs>';let content='';if(t==='pocket'){content='<circle cx="112" cy="54" r="29" fill="#d8c9af" stroke="#a78b65"/><circle cx="190" cy="54" r="29" fill="#d8c9af" stroke="#a78b65"/><path d="M38 142L164 79L141 67L162 57L146 49" fill="none" stroke="#54793b" stroke-width="2" marker-end="url(#a)"/><circle cx="151" cy="70" r="38" fill="none" stroke="#d18b4b" stroke-dasharray="4 4"/><text x="213" y="124">入口と角度</text>';}else if(t==='crossloop'){const vertical=lessons[index].ratio.p===2;content='<rect x="50" y="20" width="200" height="130" fill="none" stroke="#93a486"/><path d="'+(vertical?'M150 85L250 52.5L150 20L50 52.5L150 85L250 117.5L150 150L50 117.5Z':'M150 85L200 20L250 85L200 150L150 85L100 20L50 85L100 150Z')+'" fill="none" stroke="#54793b" stroke-width="2"/><circle cx="150" cy="85" r="9" fill="#e8ecdf" stroke="#d18b4b" stroke-width="2"/><text x="166" y="91">交点</text>';}else if(t==='collision'){content='<path d="M100 36H185V55H202V116H185V135H100V116H82V55H100Z" fill="#d5dbca" stroke="#667d52" stroke-width="2"/><path d="M34 150L82 106L34 62" fill="none" stroke="#54793b" stroke-width="2" marker-end="url(#a)"/><path d="M62 25H222V145H62Z" fill="none" stroke="#d18b4b" stroke-dasharray="4 4"/><text x="237" y="88">面</text><text x="95" y="165">外周で反射</text>';}else if(t==='multi'){content='<path d="M25 28H275V150H25Z M108 28V150 M191 28V150 M25 89H275" fill="none" stroke="#93a486" stroke-width="1" stroke-dasharray="4 4"/><path d="M38 134L258 45" stroke="#54793b" stroke-width="2" marker-end="url(#a)"/><circle cx="38" cy="134" r="6" fill="#54793b"/><circle cx="258" cy="45" r="8" fill="none" stroke="#d18b4b" stroke-width="2"/><text x="220" y="20">鏡写しの目標 T′</text><text x="150" y="165">展開図（概念図）</text>';}else if(t==='mirror'||t==='wallsize'){content='<path d="M210 18V151" stroke="#6c8860" stroke-width="3"/><path d="M48 130L210 70L267 48" fill="none" stroke="#54793b" stroke-width="2" stroke-dasharray="4 4"/><path d="M48 130L210 70L153 48" fill="none" stroke="#54793b" stroke-width="2" marker-end="url(#a)"/><circle cx="48" cy="130" r="7" fill="#54793b"/><circle cx="153" cy="48" r="8" fill="none" stroke="#d18b4b" stroke-width="3"/><circle cx="267" cy="48" r="8" fill="none" stroke="#d18b4b" stroke-dasharray="3 3"/><text x="219" y="100">壁</text><text x="213" y="27">鏡写し</text><text x="136" y="30">目標</text>';}else if(t==='two'){content='<path d="M25 25H260V145" fill="none" stroke="#6c8860" stroke-width="3"/><path d="M65 130L200 25L260 72L185 130" fill="none" stroke="#54793b" stroke-width="2" marker-end="url(#a)"/><path d="M65 130H185M125 130L260 25" fill="none" stroke="#8f9f76" stroke-dasharray="4 4"/><circle cx="65" cy="130" r="7" fill="#54793b"/><circle cx="185" cy="130" r="8" stroke="#d18b4b" fill="none" stroke-width="3"/><circle cx="125" cy="130" r="4" fill="#bd9959"/><text x="117" y="153">M</text><text x="266" y="23">C</text><text x="99" y="88">平行</text>';}else if(t==='corner'){content='<path d="M25 25H260V145" fill="none" stroke="#6c8860" stroke-width="3"/><path d="M65 130L260 25L66 130" fill="none" stroke="#54793b" stroke-width="2" marker-end="url(#a)"/><path d="M65 130L245 25L260 34L81 139" fill="none" stroke="#d18b4b" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="65" cy="130" r="8" fill="#54793b"/><text x="172" y="110">帰り道も平行</text><text x="270" y="23">角</text>';}else if(t==='symmetry'){content='<path d="M25 25H275" stroke="#6c8860" stroke-width="3"/><path d="M150 15V153" stroke="#8f9f76" stroke-dasharray="4 4"/><path d="M65 130L150 25L235 130" fill="none" stroke="#54793b" stroke-width="2" marker-end="url(#a)"/><circle cx="65" cy="130" r="7" fill="#54793b"/><circle cx="235" cy="130" r="8" stroke="#d18b4b" fill="none" stroke-width="3"/><text x="155" y="100">対称軸</text>';}else{content='<rect x="65" y="16" width="170" height="140" rx="3" fill="none" stroke="#6c8860" stroke-width="2"/><path d="M65 86L150 16L235 86L150 156Z" fill="none" stroke="#54793b" stroke-width="2" marker-end="url(#a)"/><circle cx="65" cy="86" r="7" fill="#54793b"/><text x="141" y="93">一周</text><text x="244" y="90">H</text><text x="146" y="12">W</text>';}$('diagram').innerHTML=defs+'<g font-family="sans-serif" font-size="10" fill="#68785c">'+content+'</g>';}
 function lockControls(locked){for(const id of ['angle','angleNumber','angleMode','collisionMode','stepMinus','stepPlus'])$(id).disabled=locked;$('ideal').disabled=locked||mode==='free';}
-function reset(){lockControls(false);run=null;travel=0;playing=false;finished=false;drag=null;$('replay').hidden=true;$('shotReview').hidden=true;$('scrub').value=0;$('shoot').disabled=false;$('boardHint').textContent=mode==='free'?'どこからでも引っぱって弾く · ツールで配置を変更':'盤面のどこからでも引っぱって、離す';$('result').className='result';$('result').innerHTML='<span class="result-icon">↗</span><div><strong>'+ (mode==='free'?'自由にルートを試してみよう':'まずは１ショット、試してみよう')+'</strong><p>'+(mode==='free'?'目標のリングは通過点。敵とブロックは反射します。':lessons[index].goal)+'</p></div>';}
-function shoot(){if(playing)return;scene.collisionMode=collisionMode;if(overlaps(scene)){$('result').innerHTML='<span class="result-icon">↗</span><div><strong>自キャラが判定と重なっています</strong><p>自由実験の「移動」で、敵やブロックから離してください。</p></div>';return;}if(run&&$('compare').checked)previous=run;run=predict(scene,angle,budget);buildReview();travel=0;playing=true;lockControls(true);finished=false;attempts++;$('replay').hidden=false;$('playPause').textContent='Ⅱ';$('shoot').disabled=true;$('boardHint').textContent='軌道を観察しよう';}
+function reset(){cancelGesture();aimVisible=false;$('playNext').hidden=true;$('playFeedback').textContent='引っぱって狙う · 開始位置に戻すとキャンセル';lockControls(false);run=null;travel=0;playing=false;finished=false;drag=null;$('replay').hidden=true;$('shotReview').hidden=true;$('scrub').value=0;$('shoot').disabled=false;$('boardHint').textContent=mode==='free'?'どこからでも引っぱって弾く · ツールで配置を変更':'盤面のどこからでも引っぱって、離す';$('result').className='result';$('result').innerHTML='<span class="result-icon">↗</span><div><strong>'+ (mode==='free'?'自由にルートを試してみよう':'まずは１ショット、試してみよう')+'</strong><p>'+(mode==='free'?'目標のリングは通過点。敵とブロックは反射します。':lessons[index].goal)+'</p></div>';}
+function shoot(){if(playing)return;openPlay();aimVisible=false;$('playNext').hidden=true;$('playFeedback').textContent='軌道を観察しよう';scene.collisionMode=collisionMode;if(overlaps(scene)){$('playFeedback').textContent='自キャラが判定と重なっています。移動で離してください。';$('result').innerHTML='<span class="result-icon">↗</span><div><strong>自キャラが判定と重なっています</strong><p>自由実験の「移動」で、敵やブロックから離してください。</p></div>';return;}if(run&&$('compare').checked)previous=run;run=predict(scene,angle,budget);buildReview();travel=0;playing=true;lockControls(true);finished=false;attempts++;$('replay').hidden=false;$('playPause').textContent='Ⅱ';$('shoot').disabled=true;$('boardHint').textContent='軌道を観察しよう';}
 function evaluate(){
  if(finished)return;finished=true;lockControls(false);$('shoot').disabled=false;$('playPause').textContent='▶';$('boardHint').textContent='軌道を見返す · どこからでも次のショット';
  const h=run.hits[0],l=lessons[index];let success=false,detail='';
@@ -47,8 +49,10 @@ function evaluate(){
  const distinct=new Set(run.hits.map(x=>x.id)).size,enemyHits=run.events.filter(e=>e.kind==='enemy').length,walls=run.events.filter(e=>e.kind==='wall').length;
  $('result').className='result '+(success?'success':'');
  $('result').innerHTML=`<span class="result-icon">${success?'✓':'↗'}</span><div><strong>${success?(mode==='free'?`${distinct}個の目標を通過！`:l.type==='pocket'?'CLEAR — 隙間への進入、成功！':'CLEAR — 理論が、軌道になった。'):'もう少し。軌道からヒントを探そう。'}</strong><p>${detail}<br>角度 ${(run.angle*180/Math.PI).toFixed(3)}° · 壁 ${walls}回 · 敵 ${enemyHits} HIT · 試行 ${attempts}回</p></div>`;
+ $('playFeedback').textContent=(success?'CLEAR! ':'もう一度、狙ってみよう。 ')+detail;
  const next=lessons.findIndex((_,i)=>i>index&&(group==='all'||lessonGroup(i)===group));
- if(success&&mode==='learn'&&next>=0){$('result').innerHTML+='<button class="next-lesson" id="nextLesson">次の課題へ →</button>';$('nextLesson').onclick=()=>{selectLesson(next);document.querySelector('.game-panel').scrollIntoView?.({behavior:'smooth',block:'start'});};}
+ $('playNext').hidden=!(success&&mode==='learn'&&next>=0);
+ if(success&&mode==='learn'&&next>=0){$('result').innerHTML+='<button class="next-lesson" id="nextLesson">次の課題へ →</button>';$('nextLesson').onclick=()=>{selectLesson(next);openPlay();};}
  if(success&&mode==='learn'&&!completed.includes(index)){completed.push(index);write('shotlab-completed',completed);lessonList();}
 }
 function line(a,b,color,width=1,dash=[]){ctx.beginPath();ctx.setLineDash(dash);ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();ctx.setLineDash([]);}
@@ -68,7 +72,7 @@ for(const t of scene.targets||[]){const hit=run?.hits.some(h=>h.id===t.id&&h.dis
 if(run&&$('trail').value!=='off')trajectory(run,travel,'#e3f6ab',2.2,false,$('trail').value==='recent'?Math.max(0,travel-220):0);
 if(run)run.events.filter(e=>e.dist<=travel).forEach((e,i)=>{circle(e.x,e.y,scene.pocket?2:4,'#e1f3af',true);if(!scene.pocket||e.kind==='wall')circle(e.x,e.y,9,'#d2ed9566');if($('trail').value==='full'&&(!scene.pocket||e.kind==='wall')&&(i<10||e.kind==='wall'))label(e.refs,e.x+(e.x>220?-13:13),e.y+(e.y<327?17:-11),'#e4f3c3',9);});
 const ball=run?atDistance(run,travel):scene.start;if(ball){drawBall(ball.x,ball.y);if($('collisions').checked){ctx.strokeStyle='#ffca83';ctx.lineWidth=1;ctx.setLineDash([3,3]);if(collisionMode==='circle')circle(ball.x,ball.y,F.r,'#ffca83');else ctx.strokeRect(ball.x-F.r,ball.y-F.r,F.r*2,F.r*2);ctx.setLineDash([]);}}
-if(!run||!playing&&travel===0){const len=drag?Math.min(400,Math.max(65,Math.hypot(drag.dx,drag.dy)*1.55)):125;drawArrow(scene.start,angle,len,!!drag);}
+if(aimVisible&&(!drag||drag.ready)&&(!run||!playing&&travel===0)){const len=drag?Math.min(400,Math.max(65,Math.hypot(drag.dx,drag.dy)*1.55)):125;drawArrow(scene.start,angle,len,!!drag);}
 const currentHits=run?.hits.filter(h=>h.dist<=travel).length||0,currentRefs=run?.events.filter(e=>e.dist<=travel).length||0;const enemyHits=run?.events.filter(e=>e.dist<=travel&&e.kind==='enemy').length||0;$('shotBadge').innerHTML=`反射 <b>${currentRefs}</b>　敵 <b>${enemyHits}</b> HIT　通過 <b>${currentHits}</b>`;drawMissionHUD();if(scene.pocket&&$('collisions').checked)drawPocketZoom(ball);if(drag)drawFinger();
 }
 const boundaryCache=new WeakMap();
@@ -123,7 +127,7 @@ function drawArrow(p,a,len,active){
 function drawFinger(){
  const p=drag.start,q={x:p.x-drag.dx,y:p.y-drag.dy};
  line(p,q,'#fff2b775',1.2,[4,5]);circle(p.x,p.y,5,'#fff2b7');circle(q.x,q.y,11,'#fff2b799');circle(q.x,q.y,3,'#fff2b7',true);
- label('引く',Math.max(30,Math.min(410,q.x)),Math.max(80,Math.min(575,q.y+26)),'#ffe2a1',9);
+ label(drag.ready?'引く':'離すとキャンセル',Math.max(30,Math.min(410,q.x)),Math.max(80,Math.min(575,q.y+26)),'#ffe2a1',9);
 }
 function drawMissionHUD(){
  if(mode!=='learn')return;
@@ -141,25 +145,55 @@ else if(l.type==='loop'){const points=[s,{x:220,y:F.top},{x:F.right,y:327},{x:22
 function coords(e){const r=$('board').getBoundingClientRect();return {x:(e.clientX-r.left)/r.width*440,y:(e.clientY-r.top)/r.height*640};}
 function pick(p){if(Math.hypot(p.x-scene.start.x,p.y-scene.start.y)<30)return {obj:scene.start,kind:'start'};for(const [key,r] of [['targets',30],['enemies',40],['blocks',40]]){const found=scene[key]?.find(o=>Math.hypot(p.x-o.x,p.y-o.y)<r);if(found)return {obj:found,kind:key};}return null;}
 function clamped(p,margin=0){return {x:Math.max(F.left+margin,Math.min(F.right-margin,p.x)),y:Math.max(F.top+margin,Math.min(F.bottom-margin,p.y))};}
-function startGesture(e){if(playing||e.isPrimary===false||(e.button!==undefined&&e.button!==0))return;const p=coords(e);$('board').setPointerCapture(e.pointerId);const hit=pick(p);if(mode==='free'){if(tool==='move'&&hit){if(run)reset();editDrag={...hit,pointer:e.pointerId,ox:p.x-hit.obj.x,oy:p.y-hit.obj.y};return;}if(tool==='delete'){if(hit&&hit.kind!=='start'){scene[hit.kind]=scene[hit.kind].filter(x=>x!==hit.obj);reset();}return;}if(!['move','shot'].includes(tool)){if((scene.targets.length+scene.enemies.length+scene.blocks.length)>=20){$('saveNote').textContent='配置は合計20個まで。';return;}const q=clamped(p,40),id=Date.now()+Math.random();if(tool==='target')scene.targets.push({id,...q,r:24});if(tool==='enemy')scene.enemies.push({id,...q,r:27});if(tool==='boss')scene.enemies.push({id,...q,r:38,weak:{dx:40,dy:0,r:14}});if(tool==='block')scene.blocks.push({id,...q,w:56,h:38});reset();return;}}
-if(mode==='learn'||tool==='shot'||hit?.kind==='start'){prepareAim();drag={start:p,dx:0,dy:0,pointer:e.pointerId};$('boardHint').textContent='打ちたい方向の逆へ引っぱる · Escでキャンセル';}}
+function startGesture(e){if(!$('playDialog').open||drag||editDrag||playing||e.isPrimary===false||(e.button!==undefined&&e.button!==0))return;const p=coords(e);$('board').setPointerCapture(e.pointerId);const hit=pick(p);if(mode==='free'){if(tool==='move'&&hit){if(run)reset();editDrag={...hit,pointer:e.pointerId,ox:p.x-hit.obj.x,oy:p.y-hit.obj.y};return;}if(tool==='delete'){if(hit&&hit.kind!=='start'){scene[hit.kind]=scene[hit.kind].filter(x=>x!==hit.obj);reset();}return;}if(!['move','shot'].includes(tool)){if((scene.targets.length+scene.enemies.length+scene.blocks.length)>=20){$('saveNote').textContent='配置は合計20個まで。';return;}const q=clamped(p,40),id=Date.now()+Math.random();if(tool==='target')scene.targets.push({id,...q,r:24});if(tool==='enemy')scene.enemies.push({id,...q,r:27});if(tool==='boss')scene.enemies.push({id,...q,r:38,weak:{dx:40,dy:0,r:14}});if(tool==='block')scene.blocks.push({id,...q,w:56,h:38});reset();return;}}
+if(mode==='learn'||tool==='shot'||hit?.kind==='start'){prepareAim();drag={start:p,clientStart:{x:e.clientX,y:e.clientY},dx:0,dy:0,ready:false,initialAngle:angle,pointer:e.pointerId};aimVisible=false;$('boardHint').textContent='引っぱって狙う · 開始位置へ戻すとキャンセル';}}
 $('board').addEventListener('pointerdown',startGesture);
-document.addEventListener('pointerdown',e=>{if(e.target===$('board')||$('board').contains(e.target))return;if(e.target.closest('button,input,select,textarea,a,label,dialog,.lesson-panel,.theory-panel,.topbar,.intro,.bottom-strip,footer'))return;if(e.pointerType==='touch'&&!e.target.closest('.game-panel,.board-wrap'))return;startGesture(e);});
-$('board').addEventListener('pointermove',e=>{const p=coords(e);if(editDrag&&e.pointerId!==undefined&&e.pointerId!==editDrag.pointer)return;if(editDrag){const q=clamped({x:p.x-editDrag.ox,y:p.y-editDrag.oy},editDrag.kind==='start'?0:40);Object.assign(editDrag.obj,q);return;}if(drag&&e.pointerId!==undefined&&e.pointerId!==drag.pointer)return;if(drag){drag.dx=drag.start.x-p.x;drag.dy=drag.start.y-p.y;if(Math.hypot(drag.dx,drag.dy)>4)angleSet(Math.atan2(drag.dy,drag.dx));}});
-function release(e){if(editDrag&&e.pointerId!==undefined&&e.pointerId!==editDrag.pointer)return;if(drag&&e.pointerId!==undefined&&e.pointerId!==drag.pointer)return;editDrag=null;if(drag){if(e.type==='pointerup'&&Number.isFinite(e.clientX)){const p=coords(e);drag.dx=drag.start.x-p.x;drag.dy=drag.start.y-p.y;if(Math.hypot(drag.dx,drag.dy)>4)angleSet(Math.atan2(drag.dy,drag.dx));}const fire=Math.hypot(drag.dx,drag.dy)>12;drag=null;if(e.type==='pointerup'&&fire)shoot();else $('boardHint').textContent='盤面のどこからでも引っぱって、離す';}}
-$('board').addEventListener('pointerup',release);$('board').addEventListener('pointercancel',release);$('board').addEventListener('lostpointercapture',()=>{drag=null;editDrag=null;});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&drag){drag=null;$('boardHint').textContent='キャンセルしました。もう一度引っぱれます。';}});
+
+document.addEventListener('pointerdown',e=>{
+ if(!$('playDialog').open||e.target===$('board')||$('board').contains(e.target))return;
+ if(!e.target.closest('.board-wrap')||e.target.closest('button,input,select,textarea,a,label,.focus-top,.play-options,.focus-controls,.play-status'))return;
+ startGesture(e);
+});
+function updateDrag(e){
+ if(!drag||!Number.isFinite(e.clientX)||!Number.isFinite(e.clientY))return;
+ const p=coords(e);drag.dx=drag.start.x-p.x;drag.dy=drag.start.y-p.y;
+ drag.ready=Math.hypot(e.clientX-drag.clientStart.x,e.clientY-drag.clientStart.y)>CANCEL_RADIUS;
+ aimVisible=drag.ready;
+ if(drag.ready)angleSet(Math.atan2(drag.dy,drag.dx));
+ $('boardHint').textContent=drag.ready?'離すと発射 · 開始位置へ戻すとキャンセル':'離すとキャンセル · 引けば狙い直せます';
+}
+$('board').addEventListener('pointermove',e=>{const p=coords(e);if(editDrag&&e.pointerId!==undefined&&e.pointerId!==editDrag.pointer)return;if(editDrag){const q=clamped({x:p.x-editDrag.ox,y:p.y-editDrag.oy},editDrag.kind==='start'?0:40);Object.assign(editDrag.obj,q);return;}if(drag&&e.pointerId!==undefined&&e.pointerId!==drag.pointer)return;updateDrag(e);});
+function cancelGesture(){
+ const pointer=drag?.pointer??editDrag?.pointer,restore=drag?.initialAngle;
+ drag=null;editDrag=null;
+ if(restore!==undefined)angleSet(restore);
+ aimVisible=false;
+ try{if(pointer!==undefined&&$('board').hasPointerCapture?.(pointer))$('board').releasePointerCapture(pointer);}catch{}
+}
+function release(e){
+ if(editDrag&&e.pointerId!==undefined&&e.pointerId!==editDrag.pointer)return;
+ if(drag&&e.pointerId!==undefined&&e.pointerId!==drag.pointer)return;
+ editDrag=null;
+ if(!drag)return;
+ if(e.type==='pointerup')updateDrag(e);
+ const fire=e.type==='pointerup'&&drag.ready&&$('playDialog').open;
+ if(fire){drag=null;aimVisible=false;shoot();}
+ else {cancelGesture();$('boardHint').textContent='キャンセルしました · もう一度引っぱれます';}
+}
+$('board').addEventListener('pointerup',release);$('board').addEventListener('pointercancel',release);
+$('board').addEventListener('lostpointercapture',e=>{if(e?.pointerId!==undefined&&e.pointerId!==(drag?.pointer??editDrag?.pointer))return;cancelGesture();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(drag||editDrag)){e.preventDefault?.();cancelGesture();$('boardHint').textContent='キャンセルしました · もう一度引っぱれます';}});
 function prepareAim(){if(run){if($('compare').checked)previous=run;reset();}}
 $('collisionMode').onchange=e=>{if(playing)return;prepareAim();collisionMode=e.target.value;scene.collisionMode=collisionMode;};$('angleMode').onchange=e=>{if(playing)return;prepareAim();angleMode=e.target.value;angleSet(angle);};$('stepMinus').onclick=()=>{if(playing)return;prepareAim();angleSet(angle-ANGLE_STEP);};$('stepPlus').onclick=()=>{if(playing)return;prepareAim();angleSet(angle+ANGLE_STEP);};
-$('angle').oninput=e=>{if(playing)return;prepareAim();angleSet(+e.target.value*Math.PI/180);};$('angleNumber').onchange=e=>{const v=Number(e.target.value);if(Number.isFinite(v)&&!playing){prepareAim();angleSet(Math.max(-180,Math.min(180,v))*Math.PI/180);}};$('shoot').onclick=shoot;$('reset').onclick=()=>{if(run&&$('compare').checked)previous=run;reset();};$('budget').oninput=e=>{budget=+e.target.value;$('budgetValue').textContent=budget.toLocaleString();};$('ideal').onclick=()=>{if(playing||mode==='free')return;prepareAim();angleSet(idealAngle(scene));$('theory').checked=true;};$('scrub').oninput=e=>{if(!run)return;playing=false;lockControls(false);travel=run.length*(+e.target.value/1000);$('playPause').textContent='▶';$('shoot').disabled=false;if(travel>=run.length)evaluate();};$('playPause').onclick=()=>{if(!run)return;if(travel>=run.length){travel=0;finished=false;}playing=!playing;lockControls(playing);$('playPause').textContent=playing?'Ⅱ':'▶';$('shoot').disabled=playing;};
+$('angle').oninput=e=>{if(playing)return;prepareAim();angleSet(+e.target.value*Math.PI/180);};$('angleNumber').onchange=e=>{const v=Number(e.target.value);if(Number.isFinite(v)&&!playing){prepareAim();angleSet(Math.max(-180,Math.min(180,v))*Math.PI/180);}};$('shoot').onclick=shoot;$('reset').onclick=()=>{if(run&&$('compare').checked)previous=run;reset();};$('budget').oninput=e=>{budget=+e.target.value;$('budgetValue').textContent=budget.toLocaleString();};$('ideal').onclick=()=>{if(playing||mode==='free')return;prepareAim();angleSet(idealAngle(scene));$('theory').checked=true;};$('scrub').oninput=e=>{if(!run)return;openPlay();playing=false;lockControls(false);travel=run.length*(+e.target.value/1000);$('playPause').textContent='▶';$('shoot').disabled=false;if(travel>=run.length)evaluate();};$('playPause').onclick=()=>{if(!run)return;openPlay();if(travel>=run.length){travel=0;finished=false;}playing=!playing;lockControls(playing);$('playPause').textContent=playing?'Ⅱ':'▶';$('shoot').disabled=playing;};
 $('lessonCategory').onchange=e=>{group=e.target.value;const first=lessons.findIndex((_,i)=>group==='all'||lessonGroup(i)===group);if(first>=0)selectLesson(first);lessonList();};
-$('newPractice').onclick=()=>{group='loop';$('lessonCategory').value=group;selectLesson(18);document.querySelector('.game-panel').scrollIntoView?.({behavior:'smooth',block:'start'});};
-$('freeTab').onclick=()=>{if(mode==='free')return;mode='free';scene={type:'free',start:{x:100,y:470},targets:[{id:1,x:315,y:190,r:24}],enemies:[{id:2,x:220,y:330,r:27}],blocks:[]};previous=null;attempts=0;updateMode();updateContent();reset();lessonList();};$('learnTab').onclick=()=>selectLesson(index);
+$('newPractice').onclick=()=>{group='loop';$('lessonCategory').value=group;selectLesson(18);openPlay();};
+$('freeTab').onclick=()=>{if(mode==='free'){openPlay();return;}mode='free';scene={type:'free',start:{x:100,y:470},targets:[{id:1,x:315,y:190,r:24}],enemies:[{id:2,x:220,y:330,r:27}],blocks:[]};previous=null;attempts=0;updateMode();updateContent();reset();lessonList();openPlay();};$('learnTab').onclick=()=>selectLesson(index);
 document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>{tool=b.dataset.tool;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('selected',x===b));$('boardHint').textContent=tool==='shot'?'盤面のどこからでも引っぱって、離す':tool==='move'?'ドラッグで移動 · 「弾く」で発射':tool==='delete'?'消したいものをタップ':'盤面をタップして配置';});
 $('saveLayout').onclick=()=>{$('saveNote').textContent=write('shotlab-layout',scene)?'盤面を保存しました。':'このブラウザでは保存できません。';};$('loadLayout').onclick=()=>{try{scene=cleanLayout(read('shotlab-layout',null));collisionMode=scene.collisionMode;$('collisionMode').value=collisionMode;previous=null;reset();$('saveNote').textContent='保存した盤面を開きました。';}catch{$('saveNote').textContent='有効な保存盤面がありません。';}};$('clearLayout').onclick=()=>{scene={type:'free',start:{x:100,y:470},targets:[],enemies:[],blocks:[]};previous=null;reset();};
-$('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.querySelector('.board-wrap').requestFullscreen)await document.querySelector('.board-wrap').requestFullscreen();else $('boardHint').textContent='このブラウザでは全画面表示に対応していません';}catch{$('boardHint').textContent='全画面表示を開始できませんでした';}};
+$('fullscreen').onclick=openPlay;
 $('help').onclick=$('about').onclick=()=>$('helpDialog').showModal();$('closeHelp').onclick=()=>$('helpDialog').close();$('helpDialog').onclick=e=>{if(e.target===$('helpDialog')){const r=$('helpDialog').getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)$('helpDialog').close();}};
-function frame(time){const dt=Math.min(.05,(time-lastTime)/1000||0);lastTime=time;pulse+=dt;if(playing&&run){travel=Math.min(run.length,travel+dt*680*Math.pow(.82,Math.min(10,run.events.filter(e=>e.kind==='enemy'&&e.dist<=travel).length))*(.35+.65*Math.min(1,(run.length-travel)/90))*(+$('speed').value));$('scrub').value=travel/run.length*1000;if(travel>=run.length){playing=false;evaluate();}}drawBoard();updateReviewPosition();updateFocusControls();requestAnimationFrame(frame);}
+function frame(time){const dt=Math.min(.05,(time-lastTime)/1000||0);lastTime=time;pulse+=dt;if(playing&&run){travel=Math.min(run.length,travel+dt*680*Math.pow(.82,Math.min(10,run.events.filter(e=>e.kind==='enemy'&&e.dist<=travel).length))*(.35+.65*Math.min(1,(run.length-travel)/90))*(+$('speed').value));$('scrub').value=travel/run.length*1000;if(travel>=run.length){playing=false;evaluate();}}if($('playDialog').open){drawBoard();updateFocusControls();}updateReviewPosition();requestAnimationFrame(frame);}
 
 function updatePager(){
  const available=lessons.map((_,i)=>i).filter(i=>group==='all'||lessonGroup(i)===group);
@@ -181,7 +215,7 @@ function buildReview(){lastReviewLabel='';
  document.querySelectorAll('[data-contact]').forEach(b=>b.onclick=()=>seekTo(run.events[+b.dataset.contact].dist));
 }
 function seekTo(distance){
- if(!run)return;playing=false;lockControls(false);travel=Math.max(0,Math.min(run.length,distance));
+ if(!run)return;openPlay();playing=false;lockControls(false);travel=Math.max(0,Math.min(run.length,distance));
  $('scrub').value=run.length?travel/run.length*1000:0;$('playPause').textContent='▶';$('shoot').disabled=false;
  if(travel>=run.length)evaluate();updateReviewPosition();
 }
@@ -194,8 +228,8 @@ function updateReviewPosition(){
 }
 $('previousBounce').onclick=()=>seekTo(stepDistance(run,travel,-1));
 $('nextBounce').onclick=()=>seekTo(stepDistance(run,travel,1));
-$('replayShot').onclick=()=>{if(!run)return;travel=0;finished=false;playing=true;lockControls(true);$('shoot').disabled=true;$('playPause').textContent='Ⅱ';};
-$('focusExit').onclick=()=>document.exitFullscreen?.();
+$('replayShot').onclick=()=>{if(!run)return;openPlay();travel=0;finished=false;playing=true;lockControls(true);$('shoot').disabled=true;$('playPause').textContent='Ⅱ';};
+$('focusExit').onclick=closePlay;
 $('focusReset').onclick=()=>$('reset').onclick();
 $('focusMinus').onclick=()=>$('stepMinus').onclick();
 $('focusPlus').onclick=()=>$('stepPlus').onclick();
@@ -204,10 +238,10 @@ $('focusPause').onclick=()=>$('playPause').onclick();
 function updateFocusControls(){
  $('focusAngle').textContent=(angle*180/Math.PI).toFixed(2)+'°';
  for(const id of ['focusMinus','focusPlus','focusShoot'])$(id).disabled=playing;
- $('focusPause').disabled=!run;$('focusPause').textContent=playing?'一時停止':'再生';
+ $('focusTool').disabled=playing;$('focusIdeal').disabled=playing||mode==='free';$('focusPause').disabled=!run;$('focusPause').textContent=playing?'一時停止':'再生';
 }
 document.addEventListener('keydown',e=>{
- if(e.defaultPrevented||e.ctrlKey||e.altKey||e.metaKey||e.target?.closest?.('input,select,textarea,button,a,dialog')||$('helpDialog').open)return;
+ if(!$('playDialog').open||e.defaultPrevented||e.ctrlKey||e.altKey||e.metaKey||e.target?.closest?.('input,select,textarea,button,a')||$('helpDialog').open)return;
  if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();if(!playing){prepareAim();angleSet(angle+ANGLE_STEP*(e.key==='ArrowLeft'?-1:1));}}
  else if(e.code==='Space'){e.preventDefault();if(!playing&&!e.repeat)shoot();}
  else if(e.key?.toLowerCase()==='r'&&!e.repeat)$('reset').onclick();
@@ -234,5 +268,23 @@ $('backupFile').onchange=async e=>{
  }catch(error){$('backupStatus').textContent='読み込めませんでした。'+(error instanceof SyntaxError?'JSON形式の保存ファイルを選んでください。':error.message);}
  finally{e.target.value='';}
 };
+
+
+function openPlay(){
+ if(!$('playDialog').open){$('playDialog').showModal();document.body.classList.add('play-open');$('board').focus?.({preventScroll:true});}
+ for(const [focus,original] of [['focusGuide','guide'],['focusTheory','theory'],['focusCollisions','collisions']])$(focus).checked=$(original).checked;
+ $('focusTool').value=tool;updateFocusControls();
+}
+function stopPlayInput(){
+ cancelGesture();playing=false;lockControls(false);$('shoot').disabled=false;$('playPause').textContent='▶';document.body.classList.remove('play-open');
+}
+function closePlay(){stopPlayInput();$('playDialog').close();}
+$('openPlay').onclick=openPlay;
+$('playDialog').addEventListener('close',stopPlayInput);
+$('playDialog').addEventListener('cancel',stopPlayInput);
+for(const [focus,original] of [['focusGuide','guide'],['focusTheory','theory'],['focusCollisions','collisions']])$(focus).onchange=()=>{$(original).checked=$(focus).checked;};
+$('focusIdeal').onclick=()=>{$('ideal').onclick();$('focusTheory').checked=$('theory').checked;};
+$('focusTool').onchange=e=>{cancelGesture();tool=e.target.value;document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('selected',x.dataset.tool===tool));$('boardHint').textContent=tool==='shot'?'引っぱって弾く · 元の位置に戻すとキャンセル':tool==='move'?'駒や配置をドラッグで移動':tool==='delete'?'消したいものをタップ':'盤面をタップして配置';};
+$('playNext').onclick=()=>changeLesson(1);
 
 const resume=read('shotlab-last-lesson',0);selectLesson(Number.isInteger(resume)&&resume>=0&&resume<lessons.length?resume:0);requestAnimationFrame(frame);

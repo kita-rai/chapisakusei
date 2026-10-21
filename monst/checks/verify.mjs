@@ -19,11 +19,16 @@ el('board').getContext=()=>ctx;
 Object.defineProperty(el('lessonList'),'innerHTML',{set(v){this.html=v;buttons.length=0;for(const m of v.matchAll(/data-lesson="(\d+)"/g))buttons.push({dataset:{lesson:m[1]},classList:{toggle(){}}});},get(){return this.html;}});
 const contacts=[];
 Object.defineProperty(el('contactList'),'innerHTML',{set(v){this.html=v;contacts.length=0;for(const m of v.matchAll(/data-contact="(\d+)"/g))contacts.push({dataset:{contact:m[1]},classList:{toggle(){}}});},get(){return this.html;}});
-const docListeners={};globalThis.document={addEventListener(k,f){const previous=docListeners[k];docListeners[k]=previous?e=>{previous(e);f(e);}:f;},getElementById:el,querySelectorAll:q=>q==='[data-lesson]'?buttons:q==='[data-contact]'?contacts:[],querySelector:q=>el(q),fullscreenElement:null};
+const docListeners={};globalThis.document={body:{classList:{add(){},remove(){}}},addEventListener(k,f){const previous=docListeners[k];docListeners[k]=previous?e=>{previous(e);f(e);}:f;},getElementById:el,querySelectorAll:q=>q==='[data-lesson]'?buttons:q==='[data-contact]'?contacts:[],querySelector:q=>el(q),fullscreenElement:null};
 const savedValues=new Map();globalThis.localStorage={getItem(k){return savedValues.get(k)??null;},setItem(k,v){savedValues.set(k,v);}};
 globalThis.requestAnimationFrame=fn=>{callback=fn;};
 el('compare').checked=true;el('speed').value='1';el('trail').value='full';
 await import('../app.mjs');
+assert(!el('playDialog').open,'reading the page must not automatically open gameplay');
+el('board').listeners.pointerdown({clientX:360,clientY:80,pointerId:100});
+el('board').listeners.pointermove({clientX:290,clientY:150,pointerId:100});
+el('board').listeners.pointerup({type:'pointerup',clientX:290,clientY:150,pointerId:100});
+assert(!el('shoot').disabled,'a gesture outside gameplay cannot fire');
 for(let i=0;i<lessons.length;i++){
  buttons.find(b=>+b.dataset.lesson===i).onclick();el('ideal').onclick();el('shoot').onclick();
  for(let n=0;n<500;n++){clock+=50;callback(clock);}
@@ -60,6 +65,7 @@ for(const scene of lessons.filter(l=>l.type==='crossloop')){
  assert(!loopProgress(scene,run,lap*.4).success,'first half of the loop alone cannot clear');
 }
 // Canvas-wide input: point of contact is independent of the character.
+el('boardMargin').closest=q=>q==='.board-wrap'?el('.board-wrap'):null;
 el('reset').onclick();docListeners.pointerdown({target:el('boardMargin'),clientX:460,clientY:30,pointerId:9,button:0,pointerType:'mouse'});
 board.listeners.pointermove({clientX:390,clientY:100,pointerId:9});
 board.listeners.pointerup({type:'pointerup',clientX:390,clientY:100,pointerId:9});
@@ -98,3 +104,45 @@ await el('backupFile').onchange({target:{files:[{size:100,text:async()=>JSON.str
 assert(el('gameTitle').textContent.includes('敵と壁'));assert(JSON.parse(savedValues.get('shotlab-completed')).includes(23));
 assert(el('backupStatus').textContent.includes('読み込みました'));
 console.log('PASS: lesson paging/resume, clickable contact replay, bounce stepping, replay restart, drag comparison retention, fullscreen controls, keyboard isolation and progress import.');
+
+// Dedicated play surface: scrolling the reading page never initiates aiming.
+el('focusExit').onclick();assert(!el('playDialog').open);
+docListeners.pointerdown({target:el('boardMargin'),clientX:360,clientY:80,pointerId:30,button:0,pointerType:'touch'});
+board.listeners.pointermove({clientX:300,clientY:140,pointerId:30});
+board.listeners.pointerup({type:'pointerup',clientX:300,clientY:140,pointerId:30});
+assert(!el('shoot').disabled);
+el('openPlay').onclick();assert(el('playDialog').open);
+let arrowFills=0;ctx.fill=()=>{if(ctx.fillStyle==='#ce3d12')arrowFills++;};
+el('reset').onclick();callback(clock+=50);assert.equal(arrowFills,0,'no idle arrow after reset');
+board.listeners.pointerdown({clientX:200,clientY:200,pointerId:31});
+board.listeners.pointermove({clientX:120,clientY:280,pointerId:31});callback(clock+=50);
+assert(arrowFills>0,'drag away from the start shows the arrow');
+arrowFills=0;
+board.listeners.pointermove({clientX:204,clientY:203,pointerId:31});callback(clock+=50);
+assert.equal(arrowFills,0,'returning near the starting point hides the arrow');
+board.listeners.pointerup({type:'pointerup',clientX:204,clientY:203,pointerId:31});callback(clock+=50);
+assert(!el('shoot').disabled);assert.equal(arrowFills,0,'cancelled release stays arrow-free');
+// The release position is authoritative even without a final pointermove.
+board.listeners.pointerdown({clientX:200,clientY:200,pointerId:32});
+board.listeners.pointermove({clientX:100,clientY:300,pointerId:32});
+board.listeners.pointerup({type:'pointerup',clientX:200,clientY:200,pointerId:32});
+assert(!el('shoot').disabled);
+// Returning to the start does not prevent pulling out again on the same touch.
+board.listeners.pointerdown({clientX:200,clientY:200,pointerId:33});
+board.listeners.pointermove({clientX:100,clientY:300,pointerId:33});
+board.listeners.pointermove({clientX:200,clientY:200,pointerId:33});
+board.listeners.pointermove({clientX:100,clientY:300,pointerId:33});
+board.listeners.pointerup({type:'pointerup',clientX:100,clientY:300,pointerId:33});assert(el('shoot').disabled);
+// Closing gameplay mid-gesture cancels it; opening it again cannot release it.
+el('reset').onclick();board.listeners.pointerdown({clientX:200,clientY:200,pointerId:34});
+board.listeners.pointermove({clientX:100,clientY:300,pointerId:34});el('focusExit').onclick();el('openPlay').onclick();
+board.listeners.pointerup({type:'pointerup',clientX:100,clientY:300,pointerId:34});assert(!el('shoot').disabled);
+// The cancel area is measured in screen pixels, independent of board scaling.
+board.getBoundingClientRect=()=>({left:0,top:0,width:220,height:320});
+board.listeners.pointerdown({clientX:100,clientY:100,pointerId:35});
+board.listeners.pointermove({clientX:70,clientY:130,pointerId:35});
+board.listeners.pointerup({type:'pointerup',clientX:110,clientY:100,pointerId:35});assert(!el('shoot').disabled,'10 screen pixels cancels even at half-size');
+board.listeners.pointerdown({clientX:100,clientY:100,pointerId:36});
+board.listeners.pointerup({type:'pointerup',clientX:113,clientY:100,pointerId:36});assert(el('shoot').disabled,'13 screen pixels is an intentional shot');
+el('focusExit').onclick();assert(!el('shoot').disabled,'leaving play pauses the shot');
+console.log('PASS: isolated play screen, inert reading-page gestures, disappearing arrow, return-to-origin cancellation, final pointer position, re-aiming, close-during-drag and scale-independent cancel radius.');
