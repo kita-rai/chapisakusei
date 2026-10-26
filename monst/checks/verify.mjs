@@ -4,7 +4,7 @@ import {pocketProgress,loopProgress} from '../goals.mjs';
 import {lessons} from '../lessons.mjs';
 for(const [i,scene] of lessons.entries()){
  const r=simulate(scene,snapAngle(idealAngle(scene)),scene.budget||2200);if(scene.type==='pocket'){assert(pocketProgress(scene,r).success,`pocket ${i+1} must be solvable`);continue;}if(scene.type==='crossloop'){assert(loopProgress(scene,r).success,`loop ${i+1} must be solvable`);continue;}assert(r.hits.length>0,`lesson ${i+1} must be solvable`);
- const h=r.hits[0];assert.equal(h.refs,[1,2,2,1,3,2,3,4,5,6,7,8,1,1,1,1,2,8][i]);
+ const h=r.hits[0];assert.equal(h.refs,[1,2,2,1,3,2,3,4,5,6,7,8,1,1,1,1,2,8][i]??scene.reflectionCount);
  for(const s of r.segments)for(const p of [s.a,s.b])assert(p.x>=FIELD.left-1e-4&&p.x<=FIELD.right+1e-4&&p.y>=FIELD.top-1e-4&&p.y<=FIELD.bottom+1e-4);
  assert(Math.abs(atDistance(r,r.length).x-r.segments.at(-1).b.x)<1e-5);
 }
@@ -42,7 +42,7 @@ assert.equal(angleIndex(ANGLE_STEP),1);assert.equal(angleIndex(-ANGLE_STEP),1023
 el('reset').onclick();board.listeners.pointerdown({clientX:400,clientY:30,pointerId:2});board.listeners.pointermove({clientX:350,clientY:80,pointerId:2});board.listeners.pointerup({type:'pointerup',clientX:350,clientY:80,pointerId:2});assert.equal(el('shoot').disabled,true,'dragging outside the character and playable rectangle must shoot');
 el('reset').onclick();board.listeners.pointerdown({clientX:360,clientY:80,pointerId:3});board.listeners.pointermove({clientX:300,clientY:140,pointerId:3});board.listeners.pointercancel({type:'pointercancel',pointerId:3});assert.equal(el('shoot').disabled,false,'cancelled gesture must not shoot');
 const comparison=lessons[12],a=snapAngle(idealAngle(comparison));const stepped=simulate({...comparison,collisionMode:'stepped'},a),round=simulate({...comparison,collisionMode:'circle'},a);assert(stepped.events[0].normal);assert(round.events[0].normal);assert(Math.abs(stepped.events[0].normal.x-round.events[0].normal.x)>.01,'stepped and circle must reflect differently');assert(overlaps(enemyScene,{x:220,y:300}));assert(!overlaps(enemyScene));assert(enemyParts(lessons[15].enemies[0]).some(x=>x.part==='weak'));assert.equal(simulate(lessons[15],snapAngle(idealAngle(lessons[15]))).events[0].part,'weak');
-console.log('PASS: 24 solvable quantized lessons, angle sweep, obstacle collisions, corner reflections, 24-lesson UI flow, full-board drag, angular snapping, replay, drag shot, save, help, stepped vs circle, weak-point union, overlap rejection');
+console.log('PASS: 25 solvable quantized lessons, angle sweep, obstacle collisions, corner reflections, 25-lesson UI flow, full-board drag, angular snapping, replay, drag shot, save, help, stepped vs circle, weak-point union, overlap rejection');
 
 // A pocket requires actual repeated contact on the first valid approach.
 for(const scene of lessons.filter(l=>l.pocket)){
@@ -146,3 +146,25 @@ board.listeners.pointerdown({clientX:100,clientY:100,pointerId:36});
 board.listeners.pointerup({type:'pointerup',clientX:113,clientY:100,pointerId:36});assert(el('shoot').disabled,'13 screen pixels is an intentional shot');
 el('focusExit').onclick();assert(!el('shoot').disabled,'leaving play pauses the shot');
 console.log('PASS: isolated play screen, inert reading-page gestures, disappearing arrow, return-to-origin cancellation, final pointer position, re-aiming, close-during-drag and scale-independent cancel radius.');
+
+
+// Solve using the actual gesture rather than the ideal-angle button.
+board.getBoundingClientRect=()=>({left:0,top:0,width:440,height:640});
+el('lessonCategory').onchange({target:{value:'multi'}});
+buttons.find(b=>+b.dataset.lesson===24).onclick();
+assert(el('coachStep').textContent.includes('鏡写し'));
+el('coachNext').onclick();assert(el('coachStep').textContent.includes('中点'));
+el('coachNext').onclick();assert(el('coachStep').textContent.includes('角 C'));
+assert(el('coachNext').disabled);assert(el('coachDiagram').innerHTML.includes('714'));
+const lesson=lessons[24],m={x:(lesson.start.x+lesson.targets[0].x)/2,y:(lesson.start.y+2*FIELD.bottom-lesson.targets[0].y)/2};
+assert(Math.abs(Math.atan2(FIELD.top-m.y,FIELD.right-m.x)-idealAngle(lesson))<1e-12);
+board.listeners.pointerdown({clientX:FIELD.right,clientY:FIELD.top,pointerId:50});
+board.listeners.pointerup({type:'pointerup',clientX:m.x,clientY:m.y,pointerId:50});
+for(let n=0;n<500;n++)callback(clock+=50);
+assert(el('result').innerHTML.includes('CLEAR'));
+assert.equal(JSON.parse(savedValues.get('shotlab-last-lesson')),24);
+el('reset').onclick();
+docListeners.pointerdown({target:{closest(q){return q==='.board-wrap'||q.includes('.play-coach');}},clientX:200,clientY:100,pointerId:51});
+board.listeners.pointerup({type:'pointerup',clientX:100,clientY:200,pointerId:51});
+assert(!el('shoot').disabled,'reading coach text must not begin a shot');
+console.log('PASS: 3-reflection midpoint construction, corner gesture, coach navigation and input isolation');

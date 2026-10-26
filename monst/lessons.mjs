@@ -88,3 +88,13 @@ export function lessonGroup(i) {
  if (lessons[i].type==='multi') return 'multi';
  return 'basic';
 }
+
+
+// Append so saved lesson indices keep their meaning.
+lessons.push({title:'３反射も、角から中点へ',sub:'最後の壁で鏡写し → 中点を取る',chip:'上 → 右 → 下の３反射',type:'multi',gestureThree:true,reflectionCount:3,tile:{x:1,y:-2},wallSequence:['上','右','下'],budget:2200,
+start:{x:110,y:180},targets:[{id:1,x:290,y:430,r:20,minRefs:3}],enemies:[],blocks:[],
+heading:'３反射も、\n指の２点で狙う。',lead:'２反射の「角から中点へ」を応用します。最後の下壁で目標 T を鏡写しにして T′を作り、自キャラ S と T′の中点 M を使います。',
+formula:'T′ = (Tx, 2×下壁 − Ty)\nM = (S + T′) ÷ 2 ／ 指：右上 C → M',
+steps:['目標 T を下壁の向こうへ鏡写しにする。T′は壁の外。「詳しい解説」で位置を確認。','自キャラ S と、鏡写しの目標 T′の中点 M を取る。元の目標 T との中点ではない。','右上の内側の角 C に触れ、オレンジの中点 M まで引いて離す。上 → 右 → 下の３反射で目標へ。'],
+insight:'２反射で鏡写しの目標 T′へ向かう道を考え、最後の下壁で折り返すと本当の目標 T へ届きます。この配置では中点 M が画面内に収まります。壁の順番が変わる配置には同じ作図をそのまま使えません。角度の刻みや途中の敵・ブロックによるずれもあります。教材内で幾何学的に構成した応用です。',
+goal:'上 → 右 → 下の順に３反射して目標へ。角 C から中点 M へ引いてみよう。'});
