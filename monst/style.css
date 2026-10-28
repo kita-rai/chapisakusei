@@ -61,3 +61,6 @@ dialog.play-dialog{position:fixed;inset:0;margin:0;border:0;border-radius:0;padd
 #focusDemo{background:#344d2d;color:#e1f4bd;border-color:#729951;min-height:36px;}
 .play-dialog .play-field{overflow:hidden;}
 .play-dialog [hidden]{display:none!important;}
+
+.coach-visual{margin:8px 0 4px;}.coach-visual>strong{display:block;color:#ebf4df;font-size:12px;line-height:1.5;margin:0 0 5px;}.coach-visual svg{display:block;width:100%;height:auto;max-height:180px;border-radius:8px;}.coach-visual figcaption{font-size:11px;line-height:1.6;color:#c4d6b6;margin:6px 0 0;}.visual-key{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:6px;font-size:9px;color:#8da58b;}.visual-key .key-ball{color:#c6ee80}.visual-key .key-finger{color:#ffbc7c}.visual-key .key-guide{color:#89d7ec}.play-coach #coachStep{font-size:10px;color:#9fb696;max-height:34px;line-height:1.5;margin:6px 0 2px}.theory-panel .diagram{background:#14271e;}.theory-panel .diagram svg{display:block;width:100%;height:auto;}
+@media(max-width:640px){.coach-visual svg{max-height:150px}.coach-visual>strong{font-size:11px}.coach-visual figcaption{font-size:10px}.play-coach{padding:7px 10px}.visual-key{font-size:8px}}

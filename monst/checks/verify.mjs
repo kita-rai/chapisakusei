@@ -155,7 +155,7 @@ buttons.find(b=>+b.dataset.lesson===24).onclick();
 assert(el('coachStep').textContent.includes('鏡写し'));
 el('coachNext').onclick();assert(el('coachStep').textContent.includes('中点'));
 el('coachNext').onclick();assert(el('coachStep').textContent.includes('角 C'));
-assert(el('coachNext').disabled);assert(el('coachDiagram').innerHTML.includes('714'));
+assert(el('coachNext').disabled);assert(el('coachDiagram').innerHTML.includes('指を動かす')||el('coachVisualTitle').textContent.includes('中点'));
 const lesson=lessons[24],m={x:(lesson.start.x+lesson.targets[0].x)/2,y:(lesson.start.y+2*FIELD.bottom-lesson.targets[0].y)/2};
 assert(Math.abs(Math.atan2(FIELD.top-m.y,FIELD.right-m.x)-idealAngle(lesson))<1e-12);
 board.listeners.pointerdown({clientX:FIELD.right,clientY:FIELD.top,pointerId:50});
@@ -186,7 +186,7 @@ for(let i=0;i<lessons.length;i++){
  buttons.find(b=>+b.dataset.lesson===i).onclick();
  const attemptsBefore=el('result').innerHTML;
  el('focusDemo').onclick();assert(el('shoot').disabled,'demo locks manual shots during explanation');
- for(let n=0;n<60;n++)callback(clock+=50);
+ for(let n=0;n<75;n++)callback(clock+=50);
  assert.equal(el('coachCount').textContent,'2 / 3');
  board.listeners.pointerdown({clientX:398,clientY:82,pointerId:80});
  board.listeners.pointerup({type:'pointerup',clientX:200,clientY:447,pointerId:80});
@@ -209,3 +209,21 @@ el('openPlay').onclick();el('ideal').onclick();el('shoot').onclick();
 for(let n=0;n<900;n++)callback(clock+=50);
 assert(el('result').innerHTML.includes('CLEAR'),'manual play still clears after a cancelled demo');
 console.log('PASS: responsive board fitting, all 25 staged demos, input lock, no demo/replay progress, stop, close, and return to manual play');
+
+// Each explanation step presents a different visible diagram, including demos.
+const {lessonVisual}=await import('../visuals.mjs');
+for(const l of lessons){
+ const cards=[0,1,2].map(i=>lessonVisual(l,i,'test'));
+ assert.equal(new Set(cards.map(v=>v.svg)).size,3,l.title+' needs three stages');
+ for(const card of cards){assert(!/undefined|NaN/.test(card.svg));assert(card.title&&card.caption);}
+}
+el('lessonCategory').onchange({target:{value:'multi'}});
+buttons.find(b=>+b.dataset.lesson===24).onclick();
+const firstVisual=el('coachDiagram').innerHTML;
+assert(el('coachVisualTitle').textContent.includes('壁の向こう'));
+el('coachNext').onclick();assert.notEqual(firstVisual,el('coachDiagram').innerHTML);
+assert(el('coachVisualCaption').textContent.includes('真ん中'));
+el('focusDemo').onclick();for(let n=0;n<75;n++)callback(clock+=50);
+assert(el('coachVisualTitle').textContent.includes('中間'),'demo advances the diagram with its instructions');
+el('focusDemo').onclick();
+console.log('PASS: 25 lessons with three distinct visual stages, manual navigation and demo synchronization');
