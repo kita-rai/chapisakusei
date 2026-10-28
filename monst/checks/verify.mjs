@@ -168,3 +168,44 @@ docListeners.pointerdown({target:{closest(q){return q==='.board-wrap'||q.include
 board.listeners.pointerup({type:'pointerup',clientX:100,clientY:200,pointerId:51});
 assert(!el('shoot').disabled,'reading coach text must not begin a shot');
 console.log('PASS: 3-reflection midpoint construction, corner gesture, coach navigation and input isolation');
+
+// An actual-sized field must produce a non-zero, undistorted canvas.
+const {boardSize}=await import('../display.mjs');
+for(const [width,height] of [[360,300],[1000,700],[280,220],[660,230]]){
+ const size=boardSize(width,height);assert(size.width>0&&size.height>0);
+ assert(size.width<=width+.001&&size.height<=height+.001);
+ assert(Math.abs(size.width/size.height-440/640)<1e-12);
+ el('playField').getBoundingClientRect=()=>({width,height});el('openPlay').onclick();
+ assert.equal(parseFloat(board.style.width),size.width);assert.equal(parseFloat(board.style.height),size.height);
+}
+assert.equal(boardSize(0,0),null);
+let progressWrites=0;
+globalThis.localStorage.setItem=(k,v)=>{if(k==='shotlab-completed')progressWrites++;savedValues.set(k,v);};
+el('lessonCategory').onchange({target:{value:'all'}});
+for(let i=0;i<lessons.length;i++){
+ buttons.find(b=>+b.dataset.lesson===i).onclick();
+ const attemptsBefore=el('result').innerHTML;
+ el('focusDemo').onclick();assert(el('shoot').disabled,'demo locks manual shots during explanation');
+ for(let n=0;n<60;n++)callback(clock+=50);
+ assert.equal(el('coachCount').textContent,'2 / 3');
+ board.listeners.pointerdown({clientX:398,clientY:82,pointerId:80});
+ board.listeners.pointerup({type:'pointerup',clientX:200,clientY:447,pointerId:80});
+ assert(el('shotReview').hidden,'touch cannot fire during the explanation');
+ for(let n=0;n<1100;n++)callback(clock+=50);
+ assert(el('result').innerHTML.includes('お手本の再生が完了'),`demo ${i+1} finishes`);
+ assert.equal(el('focusDemo').textContent,'▶ お手本デモ');
+ assert(!el('shoot').disabled);assert(el('playNext').hidden);
+}
+assert.equal(progressWrites,0,'demos never mark a lesson complete');
+el('replayShot').onclick();for(let n=0;n<900;n++)callback(clock+=50);
+assert.equal(progressWrites,0,'demo replay must not award progress either');
+el('focusDemo').onclick();el('focusDemo').onclick();
+for(let n=0;n<300;n++)callback(clock+=50);
+assert(el('shotReview').hidden,'stop prevents deferred firing');
+el('launchDemo').onclick();assert(el('playDialog').open);el('focusExit').onclick();
+for(let n=0;n<300;n++)callback(clock+=50);
+assert(el('shotReview').hidden,'closing during explanation prevents deferred firing');
+el('openPlay').onclick();el('ideal').onclick();el('shoot').onclick();
+for(let n=0;n<900;n++)callback(clock+=50);
+assert(el('result').innerHTML.includes('CLEAR'),'manual play still clears after a cancelled demo');
+console.log('PASS: responsive board fitting, all 25 staged demos, input lock, no demo/replay progress, stop, close, and return to manual play');
