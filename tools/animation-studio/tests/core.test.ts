@@ -1,0 +1,12 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {inverse,multiply,trs,transform,solveIK,dist} from '../src/core/math';
+import {templateRig,buildBones,poseAt,restPose} from '../src/core/rig';
+import {MotionEngine} from '../src/core/motion';
+import type {Motion} from '../src/core/types';
+const motion:Motion={preset:'sway',speed:1,power:1,secondary:1,damping:.5,loop:4,footLock:false,targets:{},rotations:{}};
+test('bind inverse restores points',()=>{const m=trs({x:17,y:42},.42,1.3);const p=transform(multiply(m,inverse(m)),{x:55,y:-20});assert.ok(dist(p,{x:55,y:-20})<1e-6);});
+test('rest matrices preserve skeleton',()=>{const r=templateRig(600,800),b=buildBones(r),p=poseAt(r,b,{...motion,preset:'still'},0);for(const k of Object.keys(r) as (keyof typeof r)[])assert.ok(dist(r[k],p.joints[k])<1e-5,k);});
+test('IK preserves both lengths and reachable target',()=>{const ik=solveIK({x:0,y:0},{x:80,y:40},60,50,1);assert.ok(Math.abs(dist({x:0,y:0},ik.elbow)-60)<1e-6);assert.ok(dist(ik.end,{x:80,y:40})<1e-6);});
+test('parent transform moves attached shoulders',()=>{const r=templateRig(600,800),b=buildBones(r),p=poseAt(r,b,motion,1);const ub=b.find(x=>x.id==='upperL')!;assert.ok(dist(transform(p.matrices.upperL,{x:0,y:0}),p.joints.shoulderL)<1e-6);assert.ok(Math.abs(dist(p.joints.shoulderL,p.joints.elbowL)-dist(ub.start,ub.end))<1e-6);});
+test('foot lock survives root displacement',()=>{const r=templateRig(600,800),b=buildBones(r),p=poseAt(r,b,{...motion,footLock:true},1);assert.ok(dist(r.ankleL,p.joints.ankleL)<.01);assert.ok(dist(r.ankleR,p.joints.ankleR)<.01);});
+test('spring seek reproduces a sequential pose without FPS dependence',()=>{const r=templateRig(600,800),b=buildBones(r),a=new MotionEngine(),c=new MotionEngine();for(let t=0;t<=2;t+=1/30)a.evaluate(r,b,motion,t);const p=a.evaluate(r,b,motion,2),q=c.evaluate(r,b,motion,2);assert.ok(Math.abs(p.soft.y-q.soft.y)<1e-8);a.evaluate(r,b,motion,.5);assert.equal(a.evaluate(r,b,motion,2).soft.y,q.soft.y);});

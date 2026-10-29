@@ -1,0 +1,16 @@
+export type Vec={x:number;y:number};
+export type Mat=[number,number,number,number,number,number];
+export type PartKind='body'|'head'|'armL'|'armR'|'legL'|'legR'|'hair'|'cloth'|'accessory';
+export type JointName='pelvis'|'waist'|'chest'|'neck'|'head'|'shoulderL'|'elbowL'|'wristL'|'shoulderR'|'elbowR'|'wristR'|'hipL'|'kneeL'|'ankleL'|'hipR'|'kneeR'|'ankleR';
+export const JOINTS:JointName[]=['pelvis','waist','chest','neck','head','shoulderL','elbowL','wristL','shoulderR','elbowR','wristR','hipL','kneeL','ankleL','hipR','kneeR','ankleR'];
+export type Rig=Record<JointName,Vec>;
+export type Bone={id:string;parent:string|null;start:Vec;end:Vec;bind:Mat;local:Mat;inverse:Mat};
+export type Geometry={rest:Float32Array;uv:Float32Array;indices:Uint32Array;boneIndices:Uint16Array;weights:Float32Array;boneIds:string[]};
+export type Part={id:string;name:string;kind:PartKind;visible:boolean;mask:Uint8Array;geometry?:Geometry;fill?:HTMLCanvasElement;fillMask?:Uint8Array;offset:Vec;rotation:number;scale:number;softness:number;anchor:Vec;order:number};
+export type MotionKey='breath'|'sway'|'circle'|'figure8'|'bounce'|'depth'|'vibration'|'settle'|'walk'|'still';
+export type Motion={preset:MotionKey;speed:number;power:number;secondary:number;damping:number;loop:number;footLock:boolean;targets:Record<string,Vec>;rotations:Record<string,number>;rootOffset?:Vec};
+export type Doc={id:string;name:string;width:number;height:number;source:HTMLCanvasElement;original?:Blob;rig:Rig;parts:Part[];motion:Motion;background?:HTMLCanvasElement;replacementBackground?:HTMLCanvasElement;repairMask:Uint8Array;protectedMask:Uint8Array;feather:number;expand:number;meshDensity:number;analysis:{status:string;confidence:Partial<Record<JointName,number>>;prompts?:({x:number;y:number;label:number})[]};revision:number};
+export type Pose={matrices:Record<string,Mat>;joints:Rig;soft:{x:number;y:number;r:number};time:number};
+export const PART_LABELS:Record<PartKind,string>={body:'胴体・腰',head:'頭',armL:'左腕',armR:'右腕',legL:'左脚',legR:'右脚',hair:'髪',cloth:'服・裾',accessory:'装飾'};
+export const JOINT_LABELS:Record<JointName,string>={pelvis:'骨盤',waist:'腰',chest:'胸郭',neck:'首',head:'頭',shoulderL:'左肩',elbowL:'左肘',wristL:'左手首',shoulderR:'右肩',elbowR:'右肘',wristR:'右手首',hipL:'左股関節',kneeL:'左膝',ankleL:'左足首',hipR:'右股関節',kneeR:'右膝',ankleR:'右足首'};
+export const MOTIONS:Record<MotionKey,{label:string;hint:string}>={still:{label:'静止',hint:'原姿勢を確認'},breath:{label:'呼吸',hint:'胴体の小さな伸縮と柔らかい余韻'},sway:{label:'左右の揺れ',hint:'腰と上半身の自然な連動'},circle:{label:'腰の円運動',hint:'横・縦の位相をずらした円運動'},figure8:{label:'腰の8の字',hint:'骨盤の8の字と上半身の追従'},bounce:{label:'上下リズム',hint:'全身の上下動と柔らかい揺れ'},depth:{label:'前後感',hint:'小さな拡縮による奥行き表現'},vibration:{label:'微振動',hint:'小さく細かな揺れ'},settle:{label:'余韻',hint:'揺れ始めから徐々に落ち着く'},walk:{label:'軽い足踏み',hint:'腕脚を逆位相で動かす'}};
