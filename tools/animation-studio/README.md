@@ -1,3 +1,15 @@
+# GitHub Pages版（2026-10-29）
+
+現在の配信先は https://kita-rai.github.io/chapisakusei/animation/ です。トップ一覧には表示しません。URLを知る人は閲覧可能です。
+
+PC版Chrome/Edgeで直接開けます。画像は外部送信せず、ブラウザ内で解析・変形・保存します。AIモデルは初回に取得します。大切な作品はプロジェクトファイルとして保存してください。
+
+開発・検証は `npm ci --ignore-scripts` → `npm run models:download` → `npm test` → `npm run build` → `node scripts/prepare-page.mjs` → `npm start`。配信手順と制限は WEB_DEPLOYMENT.md、現在の方針は PROJECT_STATE.md を参照してください。
+
+以下は移植元ローカル版の記録です。Tauri/Windows配布はこのサイト版の起動には不要です。
+
+---
+
 # イラスト・モーション工房
 
 一枚のイラストを、骨格・部位の範囲を確認しながら動かすローカル編集アプリです。画像・推論結果を外部へ送信しません。WebGL2のメッシュ描画、階層リグ、二骨IK、固定刻みのspringを共通エンジンにしています。

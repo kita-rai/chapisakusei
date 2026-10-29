@@ -6,3 +6,4 @@
 - ビルド: animation-studio branchで .github/workflows/build-animation.yml がtest→モデル検証→build→animation/更新。生成commit確認後mainへmergeし既存Pagesで公開。
 - 元設計: DESIGN_REVIEW.md。1人物・小〜中動作。自動解析は候補、アニメ絵や遮蔽は手動補正が必要。Windows native/Tauri/FFmpeg移行はWeb配信の対象外。
 - 今回: 透明境界alpha二重適用、静止時の胸変形、拡縮中IK/接地、GPU領域保持、録画中操作、補正brushを修正。検証結果はWEB_DEPLOYMENT.mdへ記録。
+- Web検証: unit12件、サブパスで実モデルpose/SAM/LaMa、再生/Undo/保存復元/MP4/PNG/連番を通過。実行エラー0。GitHub生成bundle一致。
