@@ -1,0 +1,43 @@
+name: Build animation page
+on:
+  push:
+    branches: [animation-studio]
+    paths: ['tools/animation-studio/**', '.github/workflows/build-animation.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: animation-build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/animation-studio/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: tools/animation-studio
+      - run: npm test
+        working-directory: tools/animation-studio
+      - run: npm run models:download
+        working-directory: tools/animation-studio
+      - run: npm run build && node scripts/prepare-page.mjs
+        working-directory: tools/animation-studio
+      - name: Commit verified static distribution to this branch
+        shell: bash
+        run: |
+          rm -rf animation
+          cp -r tools/animation-studio/dist animation
+          touch .nojekyll
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add animation .nojekyll
+          if ! git diff --cached --quiet; then
+            git commit -m 'Build static animation editor and verified model assets'
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi

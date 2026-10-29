@@ -1,0 +1,10 @@
+tools/animation-studio/node_modules/
+tools/animation-studio/dist/
+tools/animation-studio/public/models/
+tools/animation-studio/tests/*.png
+tools/animation-studio/tests/*.webm
+tools/animation-studio/tests/*.zip
+tools/animation-studio/tests/*.mp4
+tools/animation-studio/tests/*.imotion
+tools/animation-studio/tests/*.log
+tools/animation-studio/examples/

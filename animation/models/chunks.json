@@ -1,0 +1,1 @@
+{"mobile_sam_image_encoder.onnx":{"files":["580f5fb648ea1062-0.bin"],"bytes":28157093},"sam_mask_decoder_single.onnx":{"files":["93915fc7c993ab9d-0.bin"],"bytes":16501323},"lama_fp32.onnx":{"files":["1faef5301d78db7d-0.bin","1faef5301d78db7d-1.bin","1faef5301d78db7d-2.bin","1faef5301d78db7d-3.bin","1faef5301d78db7d-4.bin"],"bytes":208044816}}

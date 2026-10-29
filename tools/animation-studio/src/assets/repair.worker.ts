@@ -1,0 +1,7 @@
+/** Fast deterministic background repair; seeded from unmasked pixels only. Never blurs the original character. */
+self.onmessage=(e:MessageEvent)=>{try{const {rgba,width:w,height:h,mask,protectedMask}=e.data,a=new Uint8Array(mask),protectedA=new Uint8Array(protectedMask),data=new Uint8ClampedArray(rgba),known=new Uint8Array(w*h),q=new Int32Array(w*h);let head=0,tail=0;for(let i=0;i<a.length;i++)known[i]=a[i]<8||protectedA[i]>0?1:0;
+ const neighbors=(i:number)=>{const x=i%w;return [x>0?i-1:-1,x<w-1?i+1:-1,i>=w?i-w:-1,i<w*(h-1)?i+w:-1].filter(n=>n>=0);};for(let i=0;i<a.length;i++)if(!known[i]&&neighbors(i).some(n=>known[n]===1)){known[i]=2;q[tail++]=i;}if(!tail&&a.some(v=>v>0))throw Error('周囲に補完元がありません。範囲を小さくするか背景画像を選んでください');
+ while(head<tail){const i=q[head++],ns=neighbors(i).filter(n=>known[n]===1);if(ns.length){for(let c=0;c<4;c++)data[i*4+c]=ns.reduce((sum,n)=>sum+data[n*4+c],0)/ns.length;known[i]=1;for(const n of neighbors(i))if(!known[n]){known[n]=2;q[tail++]=n;}}if(head%10000===0)self.postMessage({progress:head/(w*h),message:'周辺から背景を補完中…'});}
+ // Smooth the filled field, keeping real background fixed.
+ for(let pass=0;pass<12;pass++)for(let k=pass%2;k<tail;k+=2){const i=q[k];if(protectedA[i])continue;const ns=neighbors(i);for(let c=0;c<3;c++)data[i*4+c]=(data[i*4+c]*2+ns.reduce((sum,n)=>sum+data[n*4+c],0))/(ns.length+2);}
+ self.postMessage({result:{rgba:data,width:w,height:h}},[data.buffer]);}catch(err){self.postMessage({error:err instanceof Error?err.message:String(err)});}};

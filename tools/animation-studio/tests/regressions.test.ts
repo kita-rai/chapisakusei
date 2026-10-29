@@ -1,0 +1,6 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {templateRig,buildBones,poseAt} from '../src/core/rig';import {dist} from '../src/core/math';import {silhouette} from '../src/assets/masks';import type {Motion} from '../src/core/types';
+const base:Motion={preset:'still',speed:1,power:2,secondary:1,damping:.5,loop:4,footLock:true,targets:{},rotations:{}};
+test('scaled parents keep feet at their locked positions',()=>{const r=templateRig(600,800),bones=buildBones(r);for(const preset of ['breath','depth','bounce'] as const)for(const t of [.5,1,2.7,3]){const p=poseAt(r,bones,{...base,preset},t);for(const side of ['L','R'] as const)assert.ok(dist(p.joints[`ankle${side}`],r[`ankle${side}`])<.05,preset+' '+t);}});
+test('IK target remains accurate under non-uniform scale',()=>{const r=templateRig(600,800),bones=buildBones(r),target={x:r.wristL.x-20,y:r.wristL.y-20};const p=poseAt(r,bones,{...base,preset:'depth',footLock:false,targets:{wristL:target}},1);assert.ok(dist(target,p.joints.wristL)<.01);});
+test('source alpha is preserved by binary silhouette membership',()=>{const a=new Uint8ClampedArray([0,0,0,0,0,0,0,128,0,0,0,255]);assert.deepEqual([...silhouette(a,3,1).mask],[0,255,255]);});
